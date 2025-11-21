@@ -4,6 +4,9 @@ import 'package:keycloak_wrapper/keycloak_wrapper.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:logger/logger.dart';
 
+import '../data/jellyfin/jellyfin_client.dart';
+import '../core/config/app_config.dart';
+
 /// Singleton service for managing Keycloak authentication
 class AuthService {
   static final AuthService _instance = AuthService._internal();
@@ -12,6 +15,7 @@ class AuthService {
 
   final _logger = Logger();
   final _storage = const FlutterSecureStorage();
+  final _jellyfinClient = JellyfinClient();
 
   KeycloakWrapper? _keycloakWrapper;
   final StreamController<bool> _authStateController =
@@ -82,6 +86,14 @@ class AuthService {
         _logger.i('Found saved authentication token');
         _isAuthenticated = true;
         await _fetchUserInfo();
+
+        // Also ensure Jellyfin is authenticated on app restart
+        if (AppConfig.jellyfinToken == null) {
+          _logger.i('Jellyfin not authenticated, attempting authentication...');
+          await _authenticateWithJellyfin();
+        } else {
+          _logger.i('Jellyfin already authenticated with stored token');
+        }
       }
 
       _isInitialized = true;
@@ -141,12 +153,66 @@ class AuthService {
         _logger.w('No access token received after login');
       }
 
+      // Authenticate with Jellyfin after successful Keycloak login
+      if (_isAuthenticated) {
+        _logger.i('Keycloak login successful, authenticating with Jellyfin...');
+        await _authenticateWithJellyfin();
+      }
+
       _logger.i('Login result - isAuthenticated: $_isAuthenticated');
       return _isAuthenticated;
     } catch (e, stackTrace) {
       _logger.e('Login failed: $e');
       _logger.e('Stack trace: $stackTrace');
       return false;
+    }
+  }
+
+  /// Authenticate with Jellyfin after Keycloak login
+  /// Note: Jellyfin authentication is separate from Keycloak (no SSO integration)
+  /// Following the ozzu-app pattern: hardcoded admin credentials for shared media server
+  Future<void> _authenticateWithJellyfin() async {
+    try {
+      _logger.i('Authenticating with Jellyfin...');
+
+      // Configure Jellyfin client with server URL
+      _jellyfinClient.configure(
+        serverUrl: AppConfig.jellyfinUrl,
+      );
+      _logger.i('Jellyfin client configured with server: ${AppConfig.jellyfinUrl}');
+
+      // Try to load stored Jellyfin credentials first
+      String? jellyfinUsername = await _storage.read(key: 'jellyfin_username');
+      String? jellyfinPassword = await _storage.read(key: 'jellyfin_password');
+
+      // If no stored credentials, use hardcoded admin credentials (shared media server pattern)
+      // TODO: For production, these should be configured per deployment or stored securely
+      if (jellyfinUsername == null || jellyfinPassword == null) {
+        _logger.i('No stored Jellyfin credentials, using default admin credentials');
+        jellyfinUsername = 'hadmin';  // Default admin username
+        jellyfinPassword = 'Pokemon123!';  // Default admin password
+
+        // Store these for future use
+        await _storage.write(key: 'jellyfin_username', value: jellyfinUsername);
+        await _storage.write(key: 'jellyfin_password', value: jellyfinPassword);
+      }
+
+      _logger.i('Attempting Jellyfin authentication with username: $jellyfinUsername');
+      final result = await _jellyfinClient.authenticate(jellyfinUsername, jellyfinPassword);
+
+      if (result.success) {
+        _logger.i('✅ Jellyfin authentication successful!');
+        _logger.i('Jellyfin User ID: ${result.userId}');
+        _logger.i('Jellyfin Token stored: ${result.accessToken != null}');
+      } else {
+        _logger.e('❌ Jellyfin authentication failed: ${result.error}');
+        // Even if Jellyfin auth fails, don't block Keycloak login
+        // User can still see the app, but content won't load
+      }
+    } catch (e, stackTrace) {
+      _logger.e('Error authenticating with Jellyfin: $e');
+      _logger.e('Stack trace: $stackTrace');
+      // Don't throw - allow app to continue even if Jellyfin auth fails
     }
   }
 
@@ -161,6 +227,10 @@ class AuthService {
 
       // Clear stored tokens
       await _storage.delete(key: 'keycloak_access_token');
+
+      // Clear Jellyfin configuration
+      AppConfig.jellyfinToken = null;
+      AppConfig.jellyfinUserId = null;
 
       _isAuthenticated = false;
       _userInfo = null;
@@ -222,6 +292,38 @@ class AuthService {
     } catch (e) {
       _logger.e('Error getting refresh token: $e');
       return null;
+    }
+  }
+
+  /// Configure Jellyfin credentials manually (for different deployments)
+  Future<bool> configureJellyfinCredentials({
+    required String username,
+    required String password,
+  }) async {
+    try {
+      _logger.i('Configuring custom Jellyfin credentials for user: $username');
+
+      // Store credentials
+      await _storage.write(key: 'jellyfin_username', value: username);
+      await _storage.write(key: 'jellyfin_password', value: password);
+
+      // Attempt authentication with new credentials
+      _jellyfinClient.configure(serverUrl: AppConfig.jellyfinUrl);
+      final result = await _jellyfinClient.authenticate(username, password);
+
+      if (result.success) {
+        _logger.i('✅ Jellyfin configured successfully');
+        return true;
+      } else {
+        _logger.e('❌ Jellyfin configuration failed: ${result.error}');
+        // Clear invalid credentials
+        await _storage.delete(key: 'jellyfin_username');
+        await _storage.delete(key: 'jellyfin_password');
+        return false;
+      }
+    } catch (e) {
+      _logger.e('Error configuring Jellyfin: $e');
+      return false;
     }
   }
 
