@@ -103,47 +103,42 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
                   // Search input
                   Expanded(
-                    child: TVFocusable(
+                    child: TextField(
+                      controller: _searchController,
                       focusNode: _searchFocusNode,
                       autofocus: true,
-                      borderRadius: BorderRadius.circular(8),
-                      onSelect: () => _searchFocusNode.requestFocus(),
-                      child: TextField(
-                        controller: _searchController,
-                        focusNode: _searchFocusNode,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: 'Search movies, shows...',
-                          hintStyle: const TextStyle(color: Colors.white38),
-                          prefixIcon: const Icon(
-                            Icons.search,
-                            color: Colors.white54,
-                          ),
-                          suffixIcon: _searchController.text.isNotEmpty
-                              ? IconButton(
-                                  icon: const Icon(
-                                    Icons.clear,
-                                    color: Colors.white54,
-                                  ),
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    setState(() => _results = []);
-                                  },
-                                )
-                              : null,
-                          filled: true,
-                          fillColor: AppColors.inputBackground,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide.none,
-                          ),
-                        ),
-                        onChanged: _onSearchChanged,
-                        onSubmitted: _performSearch,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
                       ),
+                      decoration: InputDecoration(
+                        hintText: 'Search movies, shows...',
+                        hintStyle: const TextStyle(color: Colors.white38),
+                        prefixIcon: const Icon(
+                          Icons.search,
+                          color: Colors.white54,
+                        ),
+                        suffixIcon: _searchController.text.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(
+                                  Icons.clear,
+                                  color: Colors.white54,
+                                ),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() => _results = []);
+                                },
+                              )
+                            : null,
+                        filled: true,
+                        fillColor: AppColors.inputBackground,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                      onChanged: _onSearchChanged,
+                      onSubmitted: _performSearch,
                     ),
                   ),
                 ],
