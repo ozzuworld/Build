@@ -115,6 +115,19 @@ class AuthService {
         return false;
       }
 
+      // Log the expected OAuth URL that should be constructed
+      final authUrl = 'https://idp.ozzu.world/realms/allsafe/protocol/openid-connect/auth';
+      final redirectUri = 'com.streamflix.streamflix://oauth2redirect';
+      final clientId = 'streamflix-tv-app';
+
+      _logger.i('===== EXPECTED OAUTH URL =====');
+      _logger.i('Authorization URL: $authUrl');
+      _logger.i('Client ID: $clientId');
+      _logger.i('Redirect URI: $redirectUri');
+      _logger.i('Full URL would be:');
+      _logger.i('$authUrl?client_id=$clientId&redirect_uri=$redirectUri&response_type=code&scope=openid%20profile%20email');
+      _logger.i('===== END EXPECTED OAUTH URL =====');
+
       _logger.i('Calling keycloak_wrapper.login()...');
       await _keycloakWrapper!.login();
       _logger.i('keycloak_wrapper.login() completed');
