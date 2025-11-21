@@ -57,12 +57,6 @@
             </intent-filter>
         </activity>
 
-        <!-- Debug Auth Management Activity -->
-        <activity
-            android:name=".DebugAuthActivity"
-            android:exported="false"
-            android:launchMode="singleTask" />
-
         <!-- Flutter embedding -->
         <meta-data
             android:name="flutterEmbedding"
