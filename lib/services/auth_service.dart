@@ -45,30 +45,31 @@ class AuthService {
         return;
       }
 
-      _keycloakWrapper = KeycloakWrapper(
-        keycloakConfig: KeycloakConfig(
-          bundleIdentifier: 'com.streamflix.streamflix',
-          clientId: clientId,
-          frontendUrl: frontendUrl,
-          realm: realm,
-        ),
-        keycloakCallbackUriScheme: 'streamflix',
+      final keycloakConfig = KeycloakConfig(
+        bundleIdentifier: 'com.streamflix.streamflix',
+        clientId: clientId,
+        frontendUrl: frontendUrl,
+        realm: realm,
       );
 
-      // Listen to authentication state changes
-      _keycloakWrapper!.onLogin = () async {
-        _logger.i('User logged in successfully');
-        _isAuthenticated = true;
-        await _fetchUserInfo();
-        _authStateController.add(true);
-      };
+      _keycloakWrapper = KeycloakWrapper(config: keycloakConfig);
 
-      _keycloakWrapper!.onLogout = () {
-        _logger.i('User logged out');
-        _isAuthenticated = false;
-        _userInfo = null;
-        _authStateController.add(false);
-      };
+      // Initialize the wrapper
+      await _keycloakWrapper!.initialize();
+
+      // Listen to authentication state changes
+      _keycloakWrapper!.authenticationStream.listen((isAuthenticated) async {
+        _logger.i('Authentication state changed: $isAuthenticated');
+        _isAuthenticated = isAuthenticated;
+
+        if (isAuthenticated) {
+          await _fetchUserInfo();
+        } else {
+          _userInfo = null;
+        }
+
+        _authStateController.add(isAuthenticated);
+      });
 
       // Check if there's a saved session
       final savedToken = await _storage.read(key: 'keycloak_access_token');
@@ -112,7 +113,7 @@ class AuthService {
       await _keycloakWrapper!.login();
 
       // Save token for persistence
-      final token = await accessToken;
+      final token = accessToken;
       if (token != null) {
         await _storage.write(key: 'keycloak_access_token', value: token);
       }
@@ -164,11 +165,11 @@ class AuthService {
   }
 
   /// Get access token
-  Future<String?> get accessToken async {
+  String? get accessToken {
     try {
       if (kIsWeb) return null;
       if (_keycloakWrapper == null) return null;
-      return await _keycloakWrapper!.getAccessToken();
+      return _keycloakWrapper!.accessToken;
     } catch (e) {
       _logger.e('Error getting access token: $e');
       return null;
@@ -176,11 +177,11 @@ class AuthService {
   }
 
   /// Get ID token
-  Future<String?> get idToken async {
+  String? get idToken {
     try {
       if (kIsWeb) return null;
       if (_keycloakWrapper == null) return null;
-      return await _keycloakWrapper!.getIdToken();
+      return _keycloakWrapper!.idToken;
     } catch (e) {
       _logger.e('Error getting ID token: $e');
       return null;
@@ -188,11 +189,11 @@ class AuthService {
   }
 
   /// Get refresh token
-  Future<String?> get refreshToken async {
+  String? get refreshToken {
     try {
       if (kIsWeb) return null;
       if (_keycloakWrapper == null) return null;
-      return await _keycloakWrapper!.getRefreshToken();
+      return _keycloakWrapper!.refreshToken;
     } catch (e) {
       _logger.e('Error getting refresh token: $e');
       return null;
