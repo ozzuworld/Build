@@ -38,30 +38,60 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
+  String _normalizeUrl(String url) {
+    url = url.trim();
+    if (url.isEmpty) return url;
+
+    // Add http:// if no protocol specified
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = 'http://$url';
+    }
+
+    // Remove trailing slash
+    if (url.endsWith('/')) {
+      url = url.substring(0, url.length - 1);
+    }
+
+    return url;
+  }
+
   Future<void> _validateServer() async {
-    final url = _serverUrlController.text.trim();
-    if (url.isEmpty) return;
+    final rawUrl = _serverUrlController.text.trim();
+    if (rawUrl.isEmpty) return;
 
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
-    final client = ref.read(jellyfinClientProvider);
-    client.configure(serverUrl: url);
+    try {
+      final url = _normalizeUrl(rawUrl);
 
-    final serverInfo = await client.getPublicSystemInfo();
+      // Update the text field with normalized URL
+      _serverUrlController.text = url;
 
-    setState(() {
-      _isLoading = false;
-      if (serverInfo != null) {
-        _isServerValid = true;
-        _serverName = serverInfo['ServerName'];
-      } else {
-        _errorMessage = 'Could not connect to server';
+      final client = ref.read(jellyfinClientProvider);
+      client.configure(serverUrl: url);
+
+      final serverInfo = await client.getPublicSystemInfo();
+
+      setState(() {
+        _isLoading = false;
+        if (serverInfo != null) {
+          _isServerValid = true;
+          _serverName = serverInfo['ServerName'];
+        } else {
+          _errorMessage = 'Could not connect to server. Please check the URL and try again.';
+          _isServerValid = false;
+        }
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
         _isServerValid = false;
-      }
-    });
+        _errorMessage = 'Invalid server URL. Please enter a valid URL (e.g., http://192.168.1.100:8096)';
+      });
+    }
   }
 
   Future<void> _login() async {
@@ -83,17 +113,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _errorMessage = null;
     });
 
-    final client = ref.read(jellyfinClientProvider);
-    final result = await client.authenticate(username, password);
+    try {
+      final client = ref.read(jellyfinClientProvider);
+      final result = await client.authenticate(username, password);
 
-    setState(() => _isLoading = false);
+      setState(() => _isLoading = false);
 
-    if (result.success) {
-      if (mounted) {
-        context.go('/home');
+      if (result.success) {
+        if (mounted) {
+          context.go('/home');
+        }
+      } else {
+        setState(() => _errorMessage = result.error ?? 'Login failed');
       }
-    } else {
-      setState(() => _errorMessage = result.error ?? 'Login failed');
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'An error occurred during login. Please try again.';
+      });
     }
   }
 
