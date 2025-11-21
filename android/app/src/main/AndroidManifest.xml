@@ -42,6 +42,21 @@
             </intent-filter>
         </activity>
 
+        <!-- OAuth Redirect Handler for Keycloak -->
+        <activity
+            android:name="net.openid.appauth.RedirectUriReceiverActivity"
+            android:exported="true"
+            android:launchMode="singleTask">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="${appAuthRedirectScheme}"
+                    android:host="oauth2redirect" />
+            </intent-filter>
+        </activity>
+
         <!-- Flutter embedding -->
         <meta-data
             android:name="flutterEmbedding"
