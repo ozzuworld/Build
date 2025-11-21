@@ -49,7 +49,7 @@ android {
 
         // Manifest placeholders
         manifestPlaceholders = [
-            'appAuthRedirectScheme': 'streamflix',
+            'appAuthRedirectScheme': 'com.streamflix.streamflix',
             'applicationName': 'android.app.Application'
         ]
     }
