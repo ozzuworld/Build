@@ -155,25 +155,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               const SizedBox(height: 32),
 
               // Server URL Field
-              TVFocusable(
+              TextField(
+                controller: _serverUrlController,
                 focusNode: _serverFocusNode,
                 autofocus: true,
-                borderRadius: BorderRadius.circular(4),
-                onSelect: () => _serverFocusNode.requestFocus(),
-                child: TextField(
-                  controller: _serverUrlController,
-                  focusNode: _serverFocusNode,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    labelText: 'Server URL',
-                    hintText: 'http://192.168.1.100:8096',
-                    labelStyle: const TextStyle(color: Colors.white70),
-                    suffixIcon: _isServerValid
-                        ? const Icon(Icons.check_circle, color: AppColors.success)
-                        : null,
-                  ),
-                  onSubmitted: (_) => _validateServer(),
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  labelText: 'Server URL',
+                  hintText: 'http://192.168.1.100:8096',
+                  labelStyle: const TextStyle(color: Colors.white70),
+                  suffixIcon: _isServerValid
+                      ? const Icon(Icons.check_circle, color: AppColors.success)
+                      : null,
                 ),
+                onSubmitted: (_) => _validateServer(),
               ),
 
               if (_serverName != null) ...[
@@ -190,40 +185,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               const SizedBox(height: 16),
 
               // Username Field
-              TVFocusable(
+              TextField(
+                controller: _usernameController,
                 focusNode: _usernameFocusNode,
-                borderRadius: BorderRadius.circular(4),
-                onSelect: () => _usernameFocusNode.requestFocus(),
-                child: TextField(
-                  controller: _usernameController,
-                  focusNode: _usernameFocusNode,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(
-                    labelText: 'Username',
-                    labelStyle: TextStyle(color: Colors.white70),
-                  ),
-                  onSubmitted: (_) => _passwordFocusNode.requestFocus(),
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  labelText: 'Username',
+                  labelStyle: TextStyle(color: Colors.white70),
                 ),
+                onSubmitted: (_) => _passwordFocusNode.requestFocus(),
               ),
 
               const SizedBox(height: 16),
 
               // Password Field
-              TVFocusable(
+              TextField(
+                controller: _passwordController,
                 focusNode: _passwordFocusNode,
-                borderRadius: BorderRadius.circular(4),
-                onSelect: () => _passwordFocusNode.requestFocus(),
-                child: TextField(
-                  controller: _passwordController,
-                  focusNode: _passwordFocusNode,
-                  obscureText: true,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(
-                    labelText: 'Password',
-                    labelStyle: TextStyle(color: Colors.white70),
-                  ),
-                  onSubmitted: (_) => _login(),
+                obscureText: true,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  labelText: 'Password',
+                  labelStyle: TextStyle(color: Colors.white70),
                 ),
+                onSubmitted: (_) => _login(),
               ),
 
               const SizedBox(height: 24),
