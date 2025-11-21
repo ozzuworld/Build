@@ -47,9 +47,10 @@ android {
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
 
-        // Keycloak OAuth redirect scheme
+        // Manifest placeholders
         manifestPlaceholders = [
-            'appAuthRedirectScheme': 'streamflix'
+            'appAuthRedirectScheme': 'streamflix',
+            'applicationName': 'android.app.Application'
         ]
     }
 
