@@ -102,10 +102,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Center(
-        child: Container(
-          width: 500,
-          padding: const EdgeInsets.all(48),
-          child: Column(
+        child: SingleChildScrollView(
+          child: Container(
+            width: 500,
+            padding: const EdgeInsets.all(48),
+            child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -259,6 +260,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
               ),
             ],
+          ),
+        ),
           ),
         ),
       ),
