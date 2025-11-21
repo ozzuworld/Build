@@ -16,8 +16,6 @@
     <application
         android:label="Streamflix"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher"
-        android:banner="@drawable/tv_banner"
         android:theme="@style/LaunchTheme"
         android:hardwareAccelerated="true">
 
