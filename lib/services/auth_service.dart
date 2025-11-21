@@ -38,6 +38,10 @@ class AuthService {
   }) async {
     try {
       _logger.i('Initializing Keycloak authentication...');
+      _logger.i('Config - frontendUrl: $frontendUrl');
+      _logger.i('Config - realm: $realm');
+      _logger.i('Config - clientId: $clientId');
+      _logger.i('Config - bundleIdentifier: com.streamflix.streamflix');
 
       if (kIsWeb) {
         _logger.w('Keycloak OAuth not supported on web platform');
@@ -52,6 +56,7 @@ class AuthService {
         realm: realm,
       );
 
+      _logger.i('Creating KeycloakWrapper instance...');
       _keycloakWrapper = KeycloakWrapper(config: keycloakConfig);
 
       // Initialize the wrapper
@@ -110,17 +115,37 @@ class AuthService {
         return false;
       }
 
+      // Log the expected OAuth URL that should be constructed
+      final authUrl = 'https://idp.ozzu.world/realms/allsafe/protocol/openid-connect/auth';
+      final redirectUri = 'com.streamflix.streamflix://oauth2redirect';
+      final clientId = 'streamflix-tv-app';
+
+      _logger.i('===== EXPECTED OAUTH URL =====');
+      _logger.i('Authorization URL: $authUrl');
+      _logger.i('Client ID: $clientId');
+      _logger.i('Redirect URI: $redirectUri');
+      _logger.i('Full URL would be:');
+      _logger.i('$authUrl?client_id=$clientId&redirect_uri=$redirectUri&response_type=code&scope=openid%20profile%20email');
+      _logger.i('===== END EXPECTED OAUTH URL =====');
+
+      _logger.i('Calling keycloak_wrapper.login()...');
       await _keycloakWrapper!.login();
+      _logger.i('keycloak_wrapper.login() completed');
 
       // Save token for persistence
       final token = accessToken;
       if (token != null) {
+        _logger.i('Access token received, saving...');
         await _storage.write(key: 'keycloak_access_token', value: token);
+      } else {
+        _logger.w('No access token received after login');
       }
 
+      _logger.i('Login result - isAuthenticated: $_isAuthenticated');
       return _isAuthenticated;
-    } catch (e) {
+    } catch (e, stackTrace) {
       _logger.e('Login failed: $e');
+      _logger.e('Stack trace: $stackTrace');
       return false;
     }
   }
