@@ -1,135 +1,62 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/navigation/tv_focus_manager.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../data/jellyfin/jellyfin_client.dart';
+import '../../../services/auth_service.dart';
+import '../../widgets/tv_widgets.dart';
 
-class LoginScreen extends ConsumerStatefulWidget {
+class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  ConsumerState<LoginScreen> createState() => _LoginScreenState();
+  State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends ConsumerState<LoginScreen> {
-  final _serverUrlController = TextEditingController();
-  final _usernameController = TextEditingController();
-  final _passwordController = TextEditingController();
-
-  final _serverFocusNode = FocusNode();
-  final _usernameFocusNode = FocusNode();
-  final _passwordFocusNode = FocusNode();
-
+class _LoginScreenState extends State<LoginScreen> {
+  final _authService = AuthService();
   bool _isLoading = false;
-  bool _isServerValid = false;
   String? _errorMessage;
-  String? _serverName;
 
   @override
-  void dispose() {
-    _serverUrlController.dispose();
-    _usernameController.dispose();
-    _passwordController.dispose();
-    _serverFocusNode.dispose();
-    _usernameFocusNode.dispose();
-    _passwordFocusNode.dispose();
-    super.dispose();
-  }
-
-  String _normalizeUrl(String url) {
-    url = url.trim();
-    if (url.isEmpty) return url;
-
-    // Add http:// if no protocol specified
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      url = 'http://$url';
-    }
-
-    // Remove trailing slash
-    if (url.endsWith('/')) {
-      url = url.substring(0, url.length - 1);
-    }
-
-    return url;
-  }
-
-  Future<void> _validateServer() async {
-    final rawUrl = _serverUrlController.text.trim();
-    if (rawUrl.isEmpty) return;
-
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
-    try {
-      final url = _normalizeUrl(rawUrl);
-
-      // Update the text field with normalized URL
-      _serverUrlController.text = url;
-
-      final client = ref.read(jellyfinClientProvider);
-      client.configure(serverUrl: url);
-
-      final serverInfo = await client.getPublicSystemInfo();
-
-      setState(() {
-        _isLoading = false;
-        if (serverInfo != null) {
-          _isServerValid = true;
-          _serverName = serverInfo['ServerName'];
-        } else {
-          _errorMessage = 'Could not connect to server. Please check the URL and try again.';
-          _isServerValid = false;
+  void initState() {
+    super.initState();
+    // Check if already authenticated
+    if (_authService.isAuthenticated) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          context.go('/home');
         }
-      });
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _isServerValid = false;
-        _errorMessage = 'Invalid server URL. Please enter a valid URL (e.g., http://192.168.1.100:8096)';
       });
     }
   }
 
   Future<void> _login() async {
-    if (!_isServerValid) {
-      await _validateServer();
-      if (!_isServerValid) return;
-    }
-
-    final username = _usernameController.text.trim();
-    final password = _passwordController.text;
-
-    if (username.isEmpty) {
-      setState(() => _errorMessage = 'Please enter username');
-      return;
-    }
-
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     try {
-      final client = ref.read(jellyfinClientProvider);
-      final result = await client.authenticate(username, password);
+      final success = await _authService.login();
 
-      setState(() => _isLoading = false);
-
-      if (result.success) {
+      if (success) {
         if (mounted) {
-          context.go('/home');
+          // Show success briefly before navigating
+          await Future.delayed(const Duration(milliseconds: 500));
+          if (mounted) {
+            context.go('/home');
+          }
         }
       } else {
-        setState(() => _errorMessage = result.error ?? 'Login failed');
+        setState(() {
+          _errorMessage = 'Authentication failed. Please try again.';
+          _isLoading = false;
+        });
       }
     } catch (e) {
       setState(() {
+        _errorMessage = 'An error occurred. Please try again later.';
         _isLoading = false;
-        _errorMessage = 'An error occurred during login. Please try again.';
       });
     }
   }
@@ -144,159 +71,170 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             width: 500,
             padding: const EdgeInsets.all(48),
             child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Logo
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(12),
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Logo
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Icon(
+                        Icons.play_arrow_rounded,
+                        color: Colors.white,
+                        size: 50,
+                      ),
                     ),
-                    child: const Icon(
-                      Icons.play_arrow_rounded,
-                      color: Colors.white,
-                      size: 40,
-                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 32),
+
+                // App Name
+                const Text(
+                  'STREAMFLIX',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 36,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 6,
                   ),
-                  const SizedBox(width: 16),
-                  const Text(
-                    'STREAMFLIX',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 4,
-                    ),
+                  textAlign: TextAlign.center,
+                ),
+
+                const SizedBox(height: 16),
+
+                // Tagline
+                const Text(
+                  'Your Personal Entertainment Hub',
+                  style: TextStyle(
+                    color: Colors.white54,
+                    fontSize: 16,
                   ),
-                ],
-              ),
-
-              const SizedBox(height: 48),
-
-              // Title
-              const Text(
-                'Connect to Jellyfin',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w600,
+                  textAlign: TextAlign.center,
                 ),
-                textAlign: TextAlign.center,
-              ),
 
-              const SizedBox(height: 32),
+                const SizedBox(height: 64),
 
-              // Server URL Field
-              TextField(
-                controller: _serverUrlController,
-                focusNode: _serverFocusNode,
-                autofocus: true,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  labelText: 'Server URL',
-                  hintText: 'http://192.168.1.100:8096',
-                  labelStyle: const TextStyle(color: Colors.white70),
-                  suffixIcon: _isServerValid
-                      ? const Icon(Icons.check_circle, color: AppColors.success)
-                      : null,
-                ),
-                onSubmitted: (_) => _validateServer(),
-              ),
-
-              if (_serverName != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'Connected to: $_serverName',
-                  style: const TextStyle(
-                    color: AppColors.success,
-                    fontSize: 12,
+                // Welcome Message
+                const Text(
+                  'Welcome Back',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w600,
                   ),
+                  textAlign: TextAlign.center,
                 ),
-              ],
 
-              const SizedBox(height: 16),
+                const SizedBox(height: 12),
 
-              // Username Field
-              TextField(
-                controller: _usernameController,
-                focusNode: _usernameFocusNode,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: 'Username',
-                  labelStyle: TextStyle(color: Colors.white70),
-                ),
-                onSubmitted: (_) => _passwordFocusNode.requestFocus(),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Password Field
-              TextField(
-                controller: _passwordController,
-                focusNode: _passwordFocusNode,
-                obscureText: true,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: 'Password',
-                  labelStyle: TextStyle(color: Colors.white70),
-                ),
-                onSubmitted: (_) => _login(),
-              ),
-
-              const SizedBox(height: 24),
-
-              // Error Message
-              if (_errorMessage != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Text(
-                    _errorMessage!,
-                    style: const TextStyle(
-                      color: AppColors.error,
-                      fontSize: 14,
-                    ),
-                    textAlign: TextAlign.center,
+                const Text(
+                  'Sign in with your account to continue',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 14,
                   ),
+                  textAlign: TextAlign.center,
                 ),
 
-              // Login Button
-              TVFocusable(
-                onSelect: _isLoading ? null : _login,
-                borderRadius: BorderRadius.circular(4),
-                child: Container(
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: _isLoading ? AppColors.primary.withOpacity(0.5) : AppColors.primary,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Center(
-                    child: _isLoading
-                        ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2,
-                            ),
-                          )
-                        : const Text(
-                            'Sign In',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
+                const SizedBox(height: 48),
+
+                // Error Message
+                if (_errorMessage != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 24),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.error.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppColors.error.withOpacity(0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.error_outline,
+                            color: AppColors.error,
+                            size: 24,
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Text(
+                              _errorMessage!,
+                              style: const TextStyle(
+                                color: AppColors.error,
+                                fontSize: 14,
+                              ),
                             ),
                           ),
+                        ],
+                      ),
+                    ),
                   ),
+
+                // Sign In Button
+                TVFocusableButton(
+                  autofocus: true,
+                  onTap: _isLoading ? null : _login,
+                  backgroundColor: _isLoading
+                      ? AppColors.primary.withOpacity(0.5)
+                      : AppColors.primary,
+                  height: 60,
+                  focusScale: 1.03,
+                  borderRadius: const BorderRadius.all(Radius.circular(12)),
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.login,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                            SizedBox(width: 12),
+                            Text(
+                              'Sign In',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
                 ),
-              ),
-            ],
+
+                const SizedBox(height: 24),
+
+                // Info Text
+                const Text(
+                  'Secure authentication powered by Keycloak',
+                  style: TextStyle(
+                    color: Colors.white38,
+                    fontSize: 12,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ),
           ),
         ),

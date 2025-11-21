@@ -3,6 +3,20 @@ import 'package:shared_preferences/shared_preferences.dart';
 class AppConfig {
   static late SharedPreferences _prefs;
 
+  // Default Server Configuration (Hardcoded)
+  // Users will connect directly to this server without needing to enter the URL
+  static const String defaultJellyfinUrl = 'http://tv.ozzu.world:8096';
+  static const String defaultJellyseerrUrl = 'http://tv.ozzu.world:5055';
+
+  // Keycloak Authentication Configuration
+  static const String keycloakUrl = 'https://idp.ozzu.world';
+  static const String keycloakRealm = 'allsafe';
+  static const String keycloakClientId = 'streamflix-tv-app';
+
+  // App Information
+  static const String appName = 'StreamFlix';
+  static const String appVersion = '1.0.0';
+
   static const String _jellyfinUrlKey = 'jellyfin_url';
   static const String _jellyfinTokenKey = 'jellyfin_token';
   static const String _jellyfinUserIdKey = 'jellyfin_user_id';
@@ -14,7 +28,8 @@ class AppConfig {
   }
 
   // Jellyfin Configuration
-  static String? get jellyfinUrl => _prefs.getString(_jellyfinUrlKey);
+  static String get jellyfinUrl =>
+      _prefs.getString(_jellyfinUrlKey) ?? defaultJellyfinUrl;
   static set jellyfinUrl(String? value) {
     if (value != null) {
       _prefs.setString(_jellyfinUrlKey, value);
@@ -42,7 +57,8 @@ class AppConfig {
   }
 
   // Jellyseerr Configuration
-  static String? get jellyseerrUrl => _prefs.getString(_jellyseerrUrlKey);
+  static String get jellyseerrUrl =>
+      _prefs.getString(_jellyseerrUrlKey) ?? defaultJellyseerrUrl;
   static set jellyseerrUrl(String? value) {
     if (value != null) {
       _prefs.setString(_jellyseerrUrlKey, value);

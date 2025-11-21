@@ -5,6 +5,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 import 'app.dart';
 import 'core/config/app_config.dart';
+import 'services/auth_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,6 +34,14 @@ void main() async {
 
   // Load app configuration
   await AppConfig.initialize();
+
+  // Initialize authentication service
+  final authService = AuthService();
+  await authService.initialize(
+    frontendUrl: AppConfig.keycloakUrl,
+    realm: AppConfig.keycloakRealm,
+    clientId: AppConfig.keycloakClientId,
+  );
 
   runApp(
     const ProviderScope(
