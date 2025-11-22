@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:keycloak_wrapper/keycloak_wrapper.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:logger/logger.dart';
+import 'package:dio/dio.dart';
 
 import '../data/jellyfin/jellyfin_client.dart';
 import '../core/config/app_config.dart';
@@ -168,12 +169,11 @@ class AuthService {
     }
   }
 
-  /// Authenticate with Jellyfin after Keycloak login
-  /// Note: Jellyfin authentication is separate from Keycloak (no SSO integration)
-  /// Following the ozzu-app pattern: hardcoded admin credentials for shared media server
+  /// Authenticate with Jellyfin using Keycloak SSO
+  /// The backend team has configured Jellyfin SSO with Keycloak
   Future<void> _authenticateWithJellyfin() async {
     try {
-      _logger.i('Authenticating with Jellyfin...');
+      _logger.i('🔐 Authenticating with Jellyfin via Keycloak SSO...');
 
       // Configure Jellyfin client with server URL
       _jellyfinClient.configure(
@@ -181,38 +181,154 @@ class AuthService {
       );
       _logger.i('Jellyfin client configured with server: ${AppConfig.jellyfinUrl}');
 
-      // Try to load stored Jellyfin credentials first
-      String? jellyfinUsername = await _storage.read(key: 'jellyfin_username');
-      String? jellyfinPassword = await _storage.read(key: 'jellyfin_password');
-
-      // If no stored credentials, use hardcoded admin credentials (shared media server pattern)
-      // TODO: For production, these should be configured per deployment or stored securely
-      if (jellyfinUsername == null || jellyfinPassword == null) {
-        _logger.i('No stored Jellyfin credentials, using default admin credentials');
-        jellyfinUsername = 'hadmin';  // Default admin username
-        jellyfinPassword = 'Pokemon123!';  // Default admin password
-
-        // Store these for future use
-        await _storage.write(key: 'jellyfin_username', value: jellyfinUsername);
-        await _storage.write(key: 'jellyfin_password', value: jellyfinPassword);
+      // Get the Keycloak access token
+      final keycloakToken = accessToken;
+      if (keycloakToken == null) {
+        _logger.e('❌ No Keycloak token available for SSO');
+        return;
       }
 
-      _logger.i('Attempting Jellyfin authentication with username: $jellyfinUsername');
-      final result = await _jellyfinClient.authenticate(jellyfinUsername, jellyfinPassword);
+      _logger.i('🎫 Using Keycloak token for SSO authentication');
 
-      if (result.success) {
-        _logger.i('✅ Jellyfin authentication successful!');
-        _logger.i('Jellyfin User ID: ${result.userId}');
-        _logger.i('Jellyfin Token stored: ${result.accessToken != null}');
+      // Try SSO authentication with Keycloak token
+      final ssoSuccess = await _authenticateWithJellyfinSSO(keycloakToken);
+
+      if (ssoSuccess) {
+        _logger.i('✅ Jellyfin SSO authentication successful!');
+        return;
+      }
+
+      // If SSO fails, fall back to checking for stored credentials
+      _logger.w('⚠️ SSO authentication failed, checking for stored credentials...');
+
+      final jellyfinUsername = await _storage.read(key: 'jellyfin_username');
+      final jellyfinPassword = await _storage.read(key: 'jellyfin_password');
+
+      if (jellyfinUsername != null && jellyfinPassword != null) {
+        _logger.i('Found stored Jellyfin credentials, attempting direct auth...');
+        final result = await _jellyfinClient.authenticate(jellyfinUsername, jellyfinPassword);
+
+        if (result.success) {
+          _logger.i('✅ Jellyfin direct authentication successful!');
+        } else {
+          _logger.e('❌ Jellyfin direct authentication failed: ${result.error}');
+        }
       } else {
-        _logger.e('❌ Jellyfin authentication failed: ${result.error}');
-        // Even if Jellyfin auth fails, don't block Keycloak login
-        // User can still see the app, but content won't load
+        _logger.w('⚠️ No stored credentials available. User will need to configure Jellyfin access.');
       }
     } catch (e, stackTrace) {
       _logger.e('Error authenticating with Jellyfin: $e');
       _logger.e('Stack trace: $stackTrace');
       // Don't throw - allow app to continue even if Jellyfin auth fails
+    }
+  }
+
+  /// Authenticate with Jellyfin using SSO and Keycloak token
+  Future<bool> _authenticateWithJellyfinSSO(String keycloakToken) async {
+    try {
+      _logger.i('🔄 Initiating Jellyfin SSO with Keycloak token...');
+
+      final dio = Dio();
+
+      // Jellyfin SSO plugin typically expects the auth flow to happen via browser redirect
+      // For mobile, we need to use the token directly with Jellyfin's API
+
+      // Option 1: Try QuickConnect-style authentication with SSO
+      final quickConnectUrl = '${AppConfig.jellyfinUrl}/sso/OID/r/keycloak';
+      _logger.i('Attempting SSO redirect authentication: $quickConnectUrl');
+
+      // Create a session with the SSO endpoint
+      final response = await dio.get(
+        quickConnectUrl,
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $keycloakToken',
+            'Accept': 'application/json',
+          },
+          followRedirects: false,
+          validateStatus: (status) => status != null && status < 500,
+        ),
+      );
+
+      _logger.i('SSO response status: ${response.statusCode}');
+      _logger.i('SSO response headers: ${response.headers}');
+
+      // Check if we got a Jellyfin token in response or cookies
+      if (response.statusCode == 200 || response.statusCode == 302) {
+        // Try to extract token from response
+        final data = response.data;
+        if (data is Map && data.containsKey('AccessToken')) {
+          final token = data['AccessToken'] as String;
+          final userId = data['User']?['Id'] as String?;
+
+          if (userId != null) {
+            // Store the Jellyfin token
+            AppConfig.jellyfinToken = token;
+            AppConfig.jellyfinUserId = userId;
+
+            // Also configure the client
+            _jellyfinClient.configure(
+              serverUrl: AppConfig.jellyfinUrl,
+              accessToken: token,
+              userId: userId,
+            );
+
+            _logger.i('✅ SSO successful! Jellyfin token obtained');
+            return true;
+          }
+        }
+
+        // Check for session cookies that might contain auth
+        final cookies = response.headers['set-cookie'];
+        if (cookies != null && cookies.isNotEmpty) {
+          _logger.i('Received cookies from SSO: ${cookies.length} cookies');
+          // Extract and store session cookies if needed
+        }
+      }
+
+      // If the above didn't work, try alternative approach
+      _logger.i('Standard SSO flow did not return token, trying alternative method...');
+      return await _authenticateWithJellyfinToken(keycloakToken);
+
+    } catch (e, stackTrace) {
+      _logger.e('SSO authentication error: $e');
+      _logger.e('Stack trace: $stackTrace');
+      return false;
+    }
+  }
+
+  /// Alternative: Use Keycloak token to get Jellyfin access via backend API
+  Future<bool> _authenticateWithJellyfinToken(String keycloakToken) async {
+    try {
+      final dio = Dio();
+
+      // Try using the user's email/username from Keycloak to authenticate
+      final username = this.username ?? this.email;
+      if (username == null) {
+        _logger.e('No username/email available from Keycloak');
+        return false;
+      }
+
+      _logger.i('Attempting to authenticate Jellyfin user: $username');
+
+      // For SSO-provisioned users, Jellyfin creates users automatically
+      // We can try to authenticate without password (SSO users may not have passwords)
+      // Or we can use a special endpoint if the backend provides one
+
+      // Check if there's a backend API endpoint for token exchange
+      // This would be something like: POST /api/jellyfin/token with Bearer token
+      // The backend validates the Keycloak token and returns a Jellyfin token
+
+      // For now, log that we need backend support
+      _logger.w('⚠️ Jellyfin SSO requires backend token exchange endpoint');
+      _logger.w('Backend should provide: POST /api/jellyfin/token');
+      _logger.w('Accepts: Authorization: Bearer <keycloak_token>');
+      _logger.w('Returns: {access_token: <jellyfin_token>, user_id: <user_id>}');
+
+      return false;
+    } catch (e) {
+      _logger.e('Token exchange error: $e');
+      return false;
     }
   }
 
