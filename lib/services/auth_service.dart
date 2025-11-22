@@ -230,65 +230,71 @@ class AuthService {
 
       final dio = Dio();
 
-      // Jellyfin SSO plugin typically expects the auth flow to happen via browser redirect
-      // For mobile, we need to use the token directly with Jellyfin's API
+      // Primary approach: Use backend API for token exchange
+      // The backend validates the Keycloak token and returns a Jellyfin token
+      try {
+        _logger.i('Attempting backend token exchange...');
+        final backendUrl = 'https://api.ozzu.world/api/jellyfin/token';
 
-      // Option 1: Try QuickConnect-style authentication with SSO
-      final quickConnectUrl = '${AppConfig.jellyfinUrl}/sso/OID/r/keycloak';
-      _logger.i('Attempting SSO redirect authentication: $quickConnectUrl');
-
-      // Create a session with the SSO endpoint
-      final response = await dio.get(
-        quickConnectUrl,
-        options: Options(
-          headers: {
-            'Authorization': 'Bearer $keycloakToken',
-            'Accept': 'application/json',
+        final response = await dio.post(
+          backendUrl,
+          options: Options(
+            headers: {
+              'Authorization': 'Bearer $keycloakToken',
+              'Content-Type': 'application/json',
+            },
+            sendTimeout: const Duration(seconds: 10),
+            receiveTimeout: const Duration(seconds: 10),
+          ),
+          data: {
+            'device_id': 'streamflix-tv-001',
+            'device_name': 'StreamFlix TV App',
+            'client_version': '1.0.0',
           },
-          followRedirects: false,
-          validateStatus: (status) => status != null && status < 500,
-        ),
-      );
+        );
 
-      _logger.i('SSO response status: ${response.statusCode}');
-      _logger.i('SSO response headers: ${response.headers}');
+        _logger.i('Backend API response status: ${response.statusCode}');
 
-      // Check if we got a Jellyfin token in response or cookies
-      if (response.statusCode == 200 || response.statusCode == 302) {
-        // Try to extract token from response
-        final data = response.data;
-        if (data is Map && data.containsKey('AccessToken')) {
-          final token = data['AccessToken'] as String;
-          final userId = data['User']?['Id'] as String?;
+        if (response.statusCode == 200) {
+          final data = response.data;
+          final token = data['access_token'] as String?;
+          final userId = data['user_id'] as String?;
 
-          if (userId != null) {
+          if (token != null && userId != null) {
             // Store the Jellyfin token
             AppConfig.jellyfinToken = token;
             AppConfig.jellyfinUserId = userId;
 
-            // Also configure the client
+            // Configure the client
             _jellyfinClient.configure(
               serverUrl: AppConfig.jellyfinUrl,
               accessToken: token,
               userId: userId,
             );
 
-            _logger.i('✅ SSO successful! Jellyfin token obtained');
+            _logger.i('✅ Backend token exchange successful!');
             return true;
           }
         }
-
-        // Check for session cookies that might contain auth
-        final cookies = response.headers['set-cookie'];
-        if (cookies != null && cookies.isNotEmpty) {
-          _logger.i('Received cookies from SSO: ${cookies.length} cookies');
-          // Extract and store session cookies if needed
+      } on DioException catch (e) {
+        if (e.type == DioExceptionType.connectionTimeout ||
+            e.type == DioExceptionType.receiveTimeout) {
+          _logger.w('⏱️ Backend API timeout - endpoint may not be implemented yet');
+        } else if (e.response?.statusCode == 404) {
+          _logger.w('⚠️ Backend API endpoint not found (404)');
+        } else {
+          _logger.e('Backend API error: ${e.message}');
         }
+      } catch (e) {
+        _logger.e('Backend token exchange failed: $e');
       }
 
-      // If the above didn't work, try alternative approach
-      _logger.i('Standard SSO flow did not return token, trying alternative method...');
-      return await _authenticateWithJellyfinToken(keycloakToken);
+      // The SSO redirect approach won't work for mobile apps
+      // It requires browser interaction that Dio can't handle
+      _logger.w('⚠️ Direct SSO endpoint not suitable for mobile apps');
+      _logger.w('Browser-based SSO redirects require WebView or backend API');
+
+      return false;
 
     } catch (e, stackTrace) {
       _logger.e('SSO authentication error: $e');
@@ -298,38 +304,13 @@ class AuthService {
   }
 
   /// Alternative: Use Keycloak token to get Jellyfin access via backend API
+  /// This method is now deprecated - use _authenticateWithJellyfinSSO instead
   Future<bool> _authenticateWithJellyfinToken(String keycloakToken) async {
-    try {
-      final dio = Dio();
-
-      // Try using the user's email/username from Keycloak to authenticate
-      final username = this.username ?? this.email;
-      if (username == null) {
-        _logger.e('No username/email available from Keycloak');
-        return false;
-      }
-
-      _logger.i('Attempting to authenticate Jellyfin user: $username');
-
-      // For SSO-provisioned users, Jellyfin creates users automatically
-      // We can try to authenticate without password (SSO users may not have passwords)
-      // Or we can use a special endpoint if the backend provides one
-
-      // Check if there's a backend API endpoint for token exchange
-      // This would be something like: POST /api/jellyfin/token with Bearer token
-      // The backend validates the Keycloak token and returns a Jellyfin token
-
-      // For now, log that we need backend support
-      _logger.w('⚠️ Jellyfin SSO requires backend token exchange endpoint');
-      _logger.w('Backend should provide: POST /api/jellyfin/token');
-      _logger.w('Accepts: Authorization: Bearer <keycloak_token>');
-      _logger.w('Returns: {access_token: <jellyfin_token>, user_id: <user_id>}');
-
-      return false;
-    } catch (e) {
-      _logger.e('Token exchange error: $e');
-      return false;
-    }
+    // This method is no longer needed as the logic is now in _authenticateWithJellyfinSSO
+    _logger.w('⚠️ Jellyfin SSO requires backend token exchange endpoint');
+    _logger.w('Backend should implement: POST https://api.ozzu.world/api/jellyfin/token');
+    _logger.w('See JELLYFIN_SSO_INTEGRATION.md for complete specification');
+    return false;
   }
 
   /// Logout user
