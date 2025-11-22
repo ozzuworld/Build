@@ -14,14 +14,24 @@ This document describes the SSO integration between the Streamflix mobile app, K
 ### Problem
 Jellyfin's SSO plugin is designed for web browser-based OAuth flows with redirects. Mobile apps need a different approach since they can't easily handle browser redirects and cookie-based sessions.
 
-## Required Backend API Endpoint
+## ⚠️ CRITICAL: Required Backend API Endpoint
 
-The backend team needs to provide a token exchange endpoint:
+**The mobile app CANNOT use browser-based SSO redirects.** The backend team MUST provide a token exchange endpoint.
+
+### Why Browser SSO Doesn't Work for Mobile
+
+Jellyfin's `/sso/OID/r/keycloak` endpoint is designed for web browsers with:
+- HTTP redirects to Keycloak login page
+- User interaction (username/password entry)
+- Cookies and session management
+- Redirects back to Jellyfin with auth code
+
+Mobile apps using HTTP clients (Dio, http) **cannot handle this flow** - the requests hang indefinitely waiting for user interaction that can't happen in an HTTP request.
 
 ### Endpoint Specification
 
 ```
-POST /api/jellyfin/token
+POST https://api.ozzu.world/api/jellyfin/token
 ```
 
 **Headers:**
